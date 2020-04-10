@@ -6,20 +6,21 @@ class kullback_leibler_nmf():
     """
     Standard non-negative matrix factorization (NMF) based on Lee & Seung NMF 
     algorithm. Uses Kullback-Leibler divergence with simple multiplicative 
-    updates (slow).
+    updates.
+
+    Reference:
+    J.J. Burred (2014). 
+    Detailed derivation of multiplicative update rules for NMF.
+    https://www.jjburred.com/research/pdf/jjburred_nmf_updates.pdf
     """
 
-    def __init__(self, V, n_components, n_iters=100,
-                 gradient=False, seed=None):
+    def __init__(self, V):
         self.V = V
-        self.n_components = n_components
-        self.n_iters = n_iters
         self.W = None
         self.H = None
-        self.seed = seed
-        self.gradient = gradient
 
-    def nmf(self, verbose=True):
+    def nmf(self, n_components, n_iters=100, gradient=False, seed=None, 
+            verbose=True):
         """
         Apply non-negative matrix factorization (NMF) minimizing 
         Kullback-Leibler divergence to matrix V through multiplicative updates.
@@ -27,52 +28,35 @@ class kullback_leibler_nmf():
         """
 
         if verbose: 
-            print("Kullback-Leibler NMF:")
+            print("Kullback-Leibler NMF,", n_components, "components")
 
-        np.random.seed(self.seed)
-        self.W = np.random.rand(self.V.shape[0], self.n_components)
-        self.H = np.random.rand(self.n_components, self.V.shape[1])
+        np.random.seed(seed)
+        self.W = np.random.rand(self.V.shape[0], n_components)
 
-        for it in range(self.n_iters):
-            if self.gradient:
+        np.random.seed(seed)
+        self.H = np.random.rand(n_components, self.V.shape[1])
+
+        for it in range(n_iters):
+            if gradient:
                 print("Not yet!")
             else:
-                self._update_H()
-                self._update_W()
+                self._update()
 
             if verbose and it % 10 == 0:
                 print("Iteration", it, "divergence:", 
                       kl_divergence(self.V, self.W.dot(self.H)))
 
         if verbose: 
-            print("End of factorization.\n")
+            print("End of factorization.")
+            print("Final divergence:", 
+                  kl_divergence(self.V, self.W.dot(self.H)), "\n")
 
-    def _update_H(self):
+    def _update(self):
         """
-        Multiplicative update of H matrix for KL NMF.
-        """
-
-        for a in range(self.H.shape[0]):
-            for m in range(self.H.shape[1]):
-                p1 = 0
-                p2 = 0
-                for i in range(self.V.shape[0]):
-                    p1 += self.W[i, a]*self.V[i, m]/(self.W.dot(self.H))[i, m]
-                for k in range(self.W.shape[0]):
-                    p2 += self.W[k, a]
-                self.H[a, m] = self.H[a, m]*(p1/p2)
-
-    def _update_W(self):
-        """
-        Multiplicative update of W matrix for KL NMF.
+        Multiplicative update of W and H matrices for Kullback-Leibler NMF.
         """
 
-        for i in range(self.W.shape[0]):
-            for a in range(self.W.shape[1]):
-                p1 = 0
-                p2 = 0
-                for m in range(self.H.shape[1]):
-                    p1 += self.H[a, m]*self.V[i, m]/(self.W.dot(self.H))[i, m]
-                for n in range(self.H.shape[1]):
-                    p2 += self.H[a, n]
-                self.W[i, a] = self.W[i, a]*(p1/p2)
+        ones_H = np.ones((self.H.shape[0], self.H.shape[1]))
+        ones_W = np.ones((self.W.shape[0], self.W.shape[1]))
+        self.H = self.H*(self.W.T.dot((self.V/self.W.dot(self.H)))/(self.W.T.dot(ones_W)))
+        self.W = self.W*((self.V/self.W.dot(self.H)).dot(self.H.T)/(ones_H.dot(self.H.T)))
